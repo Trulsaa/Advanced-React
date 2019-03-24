@@ -7,7 +7,7 @@ import ErrorMessage from "./ErrorMessage";
 import Form from "./styles/Form";
 import createItem from "./CreateItem";
 
-export const CREATE_ITEM_MUTATION = gql`
+const CREATE_ITEM_MUTATION = gql`
   mutation CREATE_ITEM_MUTATION(
     $title: String!
     $description: String!
@@ -145,3 +145,4 @@ class CreateItem extends Component {
 }
 
 export default CreateItem;
+export { CREATE_ITEM_MUTATION }
