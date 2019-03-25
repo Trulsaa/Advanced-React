@@ -145,4 +145,4 @@ class CreateItem extends Component {
 }
 
 export default CreateItem;
-export { CREATE_ITEM_MUTATION }
+export { CREATE_ITEM_MUTATION };
