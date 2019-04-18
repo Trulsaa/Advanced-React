@@ -8,6 +8,7 @@ const mutations = {
     const item = await ctx.db.mutation.createItem({ data: { ...args } }, info);
     return item;
   },
+
   updateItem(parent, args, ctx, info) {
     // First take a copy of th eupdates
     const updates = { ...args };
@@ -22,6 +23,7 @@ const mutations = {
       info
     );
   },
+
   async deleteItem(parent, args, ctx, info) {
     const where = { id: args.id };
     // 1. Find the item
@@ -31,6 +33,7 @@ const mutations = {
     // 3 Delete it!
     return ctx.db.mutation.deleteItem({ where }, info);
   },
+
   async signup(parent, args, ctx, info) {
     args.email = args.email.toLowerCase();
     // Hash there password
@@ -54,6 +57,28 @@ const mutations = {
       maxAge: 1000 * 60 * 60 * 24 * 365 // 1 year cookie
     });
     // Return the user to the browser
+    return user;
+  },
+
+  async signin(parent, { email, password }, ctx, info) {
+    // check if there is auser with that email
+    const user = await ctx.db.query.user({ where: { email } });
+    if (!user) throw new Error(`No such user found for email ${email}`);
+
+    // check if their password is correct
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) throw new Error("Invalid Password!");
+
+    // generate the JWT token
+    const token = jwt.sign({ userId: user.id }, process.env.APP_SECRET);
+
+    // set the cookie with the token
+    ctx.response.cookie("token", token, {
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24 * 365 // 1 year cookie
+    });
+
+    // return the user
     return user;
   }
 };
