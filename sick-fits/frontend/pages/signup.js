@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 
+import RequestReset from '../components/RequestReset';
 import Signin from "../components/Signin";
 import Signup from "../components/Signup";
 
@@ -14,6 +15,7 @@ const SignupPage = () => (
   <Columns>
     <Signup />
     <Signin />
+    <RequestReset />
   </Columns>
 );
 
