@@ -109,7 +109,7 @@
     ]
   },
   "plugins": [
-    // "html",
+    "html",
     "prettier"
   ]
 }

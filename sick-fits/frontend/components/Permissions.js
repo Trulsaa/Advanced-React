@@ -1,19 +1,31 @@
-import { Query } from "react-apollo";
-import React from "react";
-import gql from "graphql-tag";
+import { Query, Mutation } from 'react-apollo';
+import PropTypes from 'prop-types';
+import React from 'react';
+import gql from 'graphql-tag';
 
-import ErrorMessage from "./ErrorMessage";
-import SickButton from "./styles/SickButton";
-import Table from "./styles/Table";
+import ErrorMessage from './ErrorMessage';
+import SickButton from './styles/SickButton';
+import Table from './styles/Table';
 
 const possiblePermissions = [
-  "ADMIN",
-  "USER",
-  "ITEMCREATE",
-  "ITEMUPDATE",
-  "ITEMDELETE",
-  "PERMISSIONUPDATE"
+  'ADMIN',
+  'USER',
+  'ITEMCREATE',
+  'ITEMUPDATE',
+  'ITEMDELETE',
+  'PERMISSIONUPDATE',
 ];
+
+const UPDATE_PERMISSIONS_MUTATION = gql`
+  mutation updatePermissions($permissions: [Permission], $userId: ID!) {
+    updatePermissions(permissions: $permissions, userId: $userId) {
+      id
+      permissions
+      name
+      email
+    }
+  }
+`;
 
 const ALL_USERS_QUERY = gql`
   query {
@@ -45,7 +57,7 @@ const Permissions = props => (
           </thead>
           <tbody>
             {data.users.map(user => (
-              <User key={user.email} user={user} />
+              <UserPermisssions key={user.email} user={user} />
             ))}
           </tbody>
         </Table>
@@ -54,25 +66,80 @@ const Permissions = props => (
   </Query>
 );
 
-class User extends React.Component {
+class UserPermisssions extends React.Component {
+  static propTypes = {
+    user: PropTypes.shape({
+      name: PropTypes.string,
+      email: PropTypes.string,
+      id: PropTypes.string,
+      permissions: PropTypes.array,
+    }).isRequired,
+  };
+
+  state = {
+    permissions: this.props.user.permissions,
+  };
+  handlePermissionChange = e => {
+    const checkbox = e.target;
+    let updatedPermissions = [...this.state.permissions];
+    if (checkbox.checked) {
+      updatedPermissions.push(checkbox.value);
+    } else {
+      updatedPermissions = updatedPermissions.filter(
+        permission => permission !== checkbox.value
+      );
+    }
+    this.setState({ permissions: updatedPermissions });
+  };
   render() {
     const { name, email, id } = this.props.user;
 
     return (
-      <tr>
-        <td>{name}</td>
-        <td>{email}</td>
-        {possiblePermissions.map(permission => (
-          <td key={permission}>
-            <label htmlFor={`${id}-permission-${permission}`}>
-              <input type="checkbox" />
-            </label>
-          </td>
-        ))}
-        <td>
-          <SickButton>Update</SickButton>
-        </td>
-      </tr>
+      <Mutation
+        mutation={UPDATE_PERMISSIONS_MUTATION}
+        variables={{
+          permissions: this.state.permissions,
+          userId: this.props.user.id,
+        }}
+      >
+        {(updatePermissions, { loading, error }) => (
+          <>
+            {error && (
+              <tr>
+                <td colSpan='8'>
+                  <ErrorMessage error={error} />
+                </td>
+              </tr>
+            )}
+            <tr>
+              <td>{name}</td>
+              <td>{email}</td>
+              {possiblePermissions.map(permission => (
+                <td key={permission}>
+                  <label htmlFor={`${id}-permission-${permission}`}>
+                    <input
+                      id={`${id}-permission-${permission}`}
+                      type='checkbox'
+                      checked={this.state.permissions.includes(permission)}
+                      value={permission}
+                      onChange={this.handlePermissionChange}
+                    />
+                  </label>
+                </td>
+              ))}
+              <td>
+                <SickButton
+                  type='button'
+                  disabled={loading}
+                  onClick={updatePermissions}
+                >
+                  Updat{loading ? 'ing' : 'e'}
+                </SickButton>
+              </td>
+            </tr>
+          </>
+        )}
+      </Mutation>
     );
   }
 }

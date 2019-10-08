@@ -1,23 +1,26 @@
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const { randomBytes } = require("crypto");
-const { promisify } = require("util");
-const { transport, makeANiceEmail } = require("../mail");
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+const { promisify } = require('util');
+const { randomBytes } = require('crypto');
+
+const { hasPermission } = require('../utils');
+const { transport, makeANiceEmail } = require('../mail');
 
 const mutations = {
   async createItem(parent, args, ctx, info) {
     if (!ctx.request.userId)
-      throw new Error("You must be logged in to do that!");
+      throw new Error('You must be logged in to do that!');
 
     const item = await ctx.db.mutation.createItem(
       {
         data: {
           // This is how to create a relationship between the Item and the User
           user: {
-            connect: { id: ctx.request.userId }
+            connect: { id: ctx.request.userId },
           },
-          ...args
-        }
+          ...args,
+        },
       },
       info
     );
@@ -33,7 +36,7 @@ const mutations = {
     return ctx.db.mutation.updateItem(
       {
         data: updates,
-        where: { id: args.id }
+        where: { id: args.id },
       },
       info
     );
@@ -59,17 +62,17 @@ const mutations = {
         data: {
           ...args,
           password,
-          permissions: { set: ["USER"] }
-        }
+          permissions: { set: ['USER'] },
+        },
       },
       info
     );
     // create the JWT token for them
     const token = jwt.sign({ userId: user.id }, process.env.APP_SECRET);
     // Set the jwt as a cookie on the response
-    ctx.response.cookie("token", token, {
+    ctx.response.cookie('token', token, {
       httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24 * 365 // 1 year cookie
+      maxAge: 1000 * 60 * 60 * 24 * 365, // 1 year cookie
     });
     // Return the user to the browser
     return user;
@@ -82,15 +85,15 @@ const mutations = {
 
     // check if their password is correct
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) throw new Error("Invalid Password!");
+    if (!valid) throw new Error('Invalid Password!');
 
     // generate the JWT token
     const token = jwt.sign({ userId: user.id }, process.env.APP_SECRET);
 
     // set the cookie with the token
-    ctx.response.cookie("token", token, {
+    ctx.response.cookie('token', token, {
       httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24 * 365 // 1 year cookie
+      maxAge: 1000 * 60 * 60 * 24 * 365, // 1 year cookie
     });
 
     // return the user
@@ -98,8 +101,8 @@ const mutations = {
   },
 
   signout(parent, args, ctx, info) {
-    ctx.response.clearCookie("token");
-    return { message: "Goodbye!" };
+    ctx.response.clearCookie('token');
+    return { message: 'Goodbye!' };
   },
 
   async requestReset(parent, { email }, ctx, info) {
@@ -108,46 +111,41 @@ const mutations = {
     if (!user) throw new Error(`No such user found for email ${email}`);
 
     // Set a reset token and expiry on that user
-    const resetToken = (await promisify(randomBytes)(20)).toString("hex");
+    const resetToken = (await promisify(randomBytes)(20)).toString('hex');
     const resetTokenExpiry = Date.now() + 1000 * 60 * 60;
     const res = await ctx.db.mutation.updateUser({
       where: { email },
-      data: { resetToken, resetTokenExpiry }
+      data: { resetToken, resetTokenExpiry },
     });
 
     // Email them that reset token
     const mailRes = await transport.sendMail({
-      from: "wes@wesboz.com",
+      from: 'wes@wesboz.com',
       to: user.email,
-      subject: "Your Password Reset Token",
+      subject: 'Your Password Reset Token',
       html: makeANiceEmail(
         `Your Password Reset Token is here! \n\n <a href="${
           process.env.FRONTEND_URL
         }/reset?resetToken=${resetToken}"> Click Here to Reset</a>`
-      )
+      ),
     });
 
-    return { message: "Thanks!" };
+    return { message: 'Thanks!' };
   },
 
-  async resetPassword(
-    parent,
-    { password, confirmPassword, resetToken },
-    ctx,
-    info
-  ) {
+  async resetPassword(parent, { password, confirmPassword, resetToken }, ctx) {
     // Check if the passwords match
     if (password !== confirmPassword)
-      throw new Error("Yo Passwords don´t match!");
+      throw new Error('Yo Passwords don´t match!');
 
     // Check if its a legis reset token or if its expired
     const [user] = await ctx.db.query.users({
       where: {
         resetToken,
-        resetTokenExpiry_gte: Date.now() - 1000 * 60 * 60
-      }
+        resetTokenExpiry_gte: Date.now() - 1000 * 60 * 60,
+      },
     });
-    if (!user) throw new Error("This token is either invalid or expired");
+    if (!user) throw new Error('This token is either invalid or expired');
 
     // Hash their new password
     const newPassword = await bcrypt.hash(password, 10);
@@ -158,20 +156,46 @@ const mutations = {
       data: {
         password: newPassword,
         resetToken: null,
-        resetTokenExpiry: null
-      }
+        resetTokenExpiry: null,
+      },
     });
 
     // Generate JWT
     const token = jwt.sign({ userId: updatedUser.id }, process.env.APP_SECRET);
     // Set the JWT cookie
-    ctx.response.cookie("token", token, {
+    ctx.response.cookie('token', token, {
       httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24 * 365
+      maxAge: 1000 * 60 * 60 * 24 * 365,
     });
     // Return the new user
     return updatedUser;
-  }
+  },
+
+  async updatePermissions(parent, args, ctx, info) {
+    // Check if they are logged in
+    if (!ctx.request.userId) {
+      throw new Error('You must be logged in!');
+    }
+    // query the current user
+    const currentUser = await ctx.db.query.user(
+      {
+        where: {
+          id: ctx.request.userId,
+        },
+      },
+      info
+    );
+    // Check if theyhave permissions to do this
+    hasPermission(currentUser, ['ADMIN', 'PERMISSIONUPDATE']);
+    // Update the permissions
+    return ctx.db.mutation.updateUser(
+      {
+        data: { permissions: { set: args.permissions } },
+        where: { id: args.userId },
+      },
+      info
+    );
+  },
 };
 
 module.exports = mutations;
